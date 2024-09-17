@@ -55,3 +55,27 @@
     )
   )
 )
+
+(define-public (confirm-receipt (id uint))
+  (let ((escrow-data (unwrap! (get-escrow id) (err u404)))) ;; Retrieve escrow data
+    (begin
+      ;; Ensure only the buyer can confirm receipt
+      (asserts! (is-eq tx-sender (get buyer escrow-data)) (err u1)) ;; Error if the sender is not the buyer
+
+      ;; Ensure the escrow status is Open before confirming receipt
+      (asserts! (is-eq (get status escrow-data) u0) (err u10)) ;; Error if status is not Open
+
+      ;; Transfer funds to the seller
+      (match (stx-transfer? (get amount escrow-data) tx-sender (get seller escrow-data))
+        success (begin
+          ;; Update the escrow status to Completed (1)
+          (map-set escrow-contracts {id: id} 
+            (merge escrow-data {status: u1})
+          )
+          (ok true) ;; Return true to indicate success
+        )
+        error (err u2) ;; Error if the transfer fails
+      )
+    )
+  )
+)
