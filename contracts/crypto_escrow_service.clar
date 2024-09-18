@@ -79,3 +79,27 @@
     )
   )
 )
+
+(define-public (request-refund (id uint))
+  (let ((escrow-data (unwrap! (get-escrow id) (err u404)))) ;; Retrieve escrow data
+    (begin
+      ;; Ensure only the buyer can request a refund
+      (asserts! (is-eq tx-sender (get buyer escrow-data)) (err u4)) ;; Error if the sender is not the buyer
+
+      ;; Ensure the escrow status is Open before requesting a refund
+      (asserts! (is-eq (get status escrow-data) u0) (err u11)) ;; Error if status is not Open
+
+      ;; Refund funds to the buyer
+      (match (stx-transfer? (get amount escrow-data) tx-sender (get buyer escrow-data))
+        success (begin
+          ;; Update the escrow status to Refunded (2)
+          (map-set escrow-contracts {id: id}
+            (merge escrow-data {status: u2})
+          )
+          (ok true) ;; Return true to indicate success
+        )
+        error (err u5) ;; Error if the transfer fails
+      )
+    )
+  )
+)
