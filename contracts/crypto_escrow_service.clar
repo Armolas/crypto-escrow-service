@@ -103,3 +103,34 @@
     )
   )
 )
+
+(define-public (arbitrate (id uint) (decision uint))
+  (let ((escrow-data (unwrap! (get-escrow id) (err u404)))) ;; Retrieve escrow data
+    (begin
+      ;; Ensure only the arbiter can arbitrate
+      (asserts! (is-eq tx-sender (get arbiter escrow-data)) (err u7)) ;; Error if the sender is not the arbiter
+
+      ;; Ensure the escrow status is Open before arbitration
+      (asserts! (is-eq (get status escrow-data) u0) (err u12)) ;; Error if status is not Open
+
+      ;; Ensure the decision is valid (1 = Release to Seller, 2 = Refund to Buyer)
+      (asserts! (or (is-eq decision u1) (is-eq decision u2)) (err u13)) ;; Error if the decision is invalid
+
+      ;; Make the transfer based on the decision
+      (match (if (is-eq decision u1)
+                ;; Release funds to the seller
+                (stx-transfer? (get amount escrow-data) tx-sender (get seller escrow-data))
+                ;; Refund funds to the buyer
+                (stx-transfer? (get amount escrow-data) tx-sender (get buyer escrow-data)))
+        success (begin
+          ;; Update the escrow status based on the decision
+          (map-set escrow-contracts {id: id}
+            (merge escrow-data {status: decision})
+          )
+          (ok true) ;; Return true to indicate success
+        )
+        error (err u8) ;; Error if the transfer fails
+      )
+    )
+  )
+)
